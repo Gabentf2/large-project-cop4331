@@ -9,10 +9,6 @@ DisplayName: {
 type: String,
 required: true
 },
-Login: {
-type: String,
-required: true
-},
 Password: {
 type: String,
 required: true

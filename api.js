@@ -6,17 +6,17 @@ var error = '';
 const { login, password } = req.body;
 const db = client.db('COP4331');
 const results = await
-db.collection('Users').find({Login:login,Password:password}).toArray();
+db.collection('Users').find({Email:email,Password:password}).toArray(); //honestly the password should be hashed but whatever we ball
 var id = -1;
 var fn = '';
-var ln = '';
+//var ln = '';
 if( results.length > 0 )
 {
 id = results[0].UserID;
-fn = results[0].FirstName;
-ln = results[0].LastName;
+fn = results[0].DisplayName;
+//
 }
-var ret = { id:id, firstName:fn, lastName:ln, error:''};
+var ret = { id:id, Name:fn, /*Email:ln,*/ error:''};
 res.status(200).json(ret);
 });
 
@@ -126,6 +126,91 @@ app.post('/api/verify-token', async (req, res) => {
     } catch (err) {
         console.error('verify-token error', err);
         res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
+// POST /api/request-password-reset
+// body: { email }
+app.post('/api/request-password-reset', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Missing email' });
+
+        const db = client.db('COP4331');
+        const user = await db.collection('Users').findOne({ Email: email });
+
+        // Always return 200 to avoid leaking whether email exists
+        if (!user) {
+            return res.status(200).json({ ok: true });
+        }
+
+        const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
+        const token = jwt.sign(
+            { userId: user._id.toString(), purpose: 'password_reset' },
+            jwtSecret,
+            { expiresIn: '1h' } // short expiry
+        );
+
+        const resetUrlBase = process.env.FRONTEND_RESET_URL || 'http://localhost:3000/reset-password?token=';
+        const resetUrl = resetUrlBase + encodeURIComponent(token);
+
+        const mailOptions = {
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: email,
+            subject: 'Reset your password',
+            text: `Hello ${user.DisplayName || ''}, reset your password: ${resetUrl}`,
+            html: `<p>Hello ${user.DisplayName || ''},</p><p>Reset your password by clicking <a href="${resetUrl}">this link</a>. This link expires in 1 hour.</p>`
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.status(200).json({ ok: true });
+    } catch (err) {
+        console.error('request-password-reset error', err);
+        res.status(500).json({ error: 'Failed to request password reset' });
+    }
+});
+
+// POST /api/reset-password
+// body: { token, newPassword }
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) return res.status(400).json({ error: 'Missing token or newPassword' });
+
+        const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
+        let payload;
+        try {
+            payload = jwt.verify(token, jwtSecret);
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid or expired token' });
+        }
+
+        if (payload.purpose !== 'password_reset' || !payload.userId) {
+            return res.status(400).json({ error: 'Invalid token' });
+        }
+
+        const userId = payload.userId;
+        if (!ObjectId.isValid(userId)) {
+            return res.status(400).json({ error: 'Invalid user id in token' });
+        }
+
+        const db = client.db('COP4331');
+
+        // Note: per project style no hashing used
+        const update = await db.collection('Users').updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { Password: newPassword, PasswordResetAt: new Date() } }
+        );
+
+        if (update.matchedCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json({ ok: true });
+    } catch (err) {
+        console.error('reset-password error', err);
+        res.status(500).json({ error: 'Failed to reset password' });
     }
 });
 
