@@ -5,7 +5,7 @@ const UserSchema = new Schema({
 UserId: {
 type: Number
 },
-DisplayName: {
+DisplayName: { //remove?
 type: String,
 required: true
 },
@@ -16,6 +16,11 @@ required: true
 Email: {
 type: String,
 required: true
-}
+},
+// Array of Event IDs owned by this user
+OwnedEvents: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Event'
+}]
 });
 module.exports = user = mongoose.model("Users", UserSchema);
