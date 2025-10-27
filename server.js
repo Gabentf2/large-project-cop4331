@@ -46,9 +46,15 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
         const jwt = require('jsonwebtoken');
         const jwtSecret = process.env.JWT_SECRET || 'strongest_secret_evar';
         const payload = { userId: user._id.toString(), email: user.Email };
-        const token = jwt.sign(payload, jwtSecret, { expiresIn: '7d' });
+        const token = jwt.sign(payload, jwtSecret, { expiresIn: '1h' });
 
 		localStorage.setItem('token', token);
+
+		await StoredToken.create({
+			userId: user._id.toString(),
+			token: token,
+			expiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+		});
 
         return res.status(200).json({ ok: true, userId: user._id.toString(), name: user.DisplayName, token });
     } catch (err) {

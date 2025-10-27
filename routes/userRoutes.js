@@ -3,6 +3,7 @@ const router = express.Router();
 const Event = require('../models/event');
 const User = require('../models/user');
 const authenticateToken = require('../middleware/auth');
+const StoredToken = require('../models/storedToken');
 
 function inTheFuture(date, hours) {
     const toAdd = hours * 60 * 60 * 1000; // hours to milliseconds
@@ -60,10 +61,19 @@ router.post('/api/createEvent', async (req, res) => {
 //authentication will be delt with later if needed...
 router.delete('/api/deleteEvent/:eventId', /*authenticateToken,*/ async (req, res) => { 
     const { eventId } = req.params;
-    const tokenUserId = req.user && req.user.userId;
+    //const tokenUserId = req.user && req.user.userId;
 
-    if (!tokenUserId) return res.status(401).json({ error: 'Invalid token payload' });
-
+    //if (!tokenUserId) return res.status(401).json({ error: 'Invalid token payload' });
+    //actual implementation of jwt chatgpt more like uhhhh
+    const foundToken = StoredToken.findOne({ token: localStorage.getItem('token') });
+    if (!foundToken) return res.status(401).json({ error: 'Invalid or missing token' });
+    else if(foundToken.expiry < new Date()) {
+        return res.status(403).json({ error: 'Token expired' });
+    }
+    else
+    {
+        const tokenUserId = foundToken.userId;
+    }
     try {
         // Find the user
         const user = await User.findById(tokenUserId);

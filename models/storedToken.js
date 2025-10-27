@@ -6,7 +6,7 @@ const storedTokenSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now, expires: 3600 } // Token expires after 1 hour
 });
 
-const StoredToken = mongoose.model('StoredToken', storedTokenSchema);
+const StoredToken = mongoose.model('storedToken', storedTokenSchema);
 
 module.exports = StoredToken;   
 
