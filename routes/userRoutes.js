@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Event = require('../models/event');
 const User = require('../models/user');
-const authenticateToken = require('../middleware/auth');
+const authenticateToken = require('../middleware/auth'); //chatgpt garbage that might not be used...
 const StoredToken = require('../models/storedToken');
+var LocalStorage = require('node-localstorage').LocalStorage;
+LocalStorage = new LocalStorage('./scratch');
 
 function inTheFuture(date, hours) {
     const toAdd = hours * 60 * 60 * 1000; // hours to milliseconds

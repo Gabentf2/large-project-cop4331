@@ -16,6 +16,14 @@ const cors = require('cors');
 const userRoutes = require('./routes/userRoutes');
 const { startCleanup } = require('./utils/cleanup');
 
+var LocalStorage = require('node-localstorage').LocalStorage;
+LocalStorage = new LocalStorage('./scratch'); //this will need to be addressed when deploying probably
+
+//models
+const StoredToken = require('./models/storedToken');
+const User = require('./models/user');
+const Event = require('./models/event');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -48,14 +56,15 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
         const payload = { userId: user._id.toString(), email: user.Email };
         const token = jwt.sign(payload, jwtSecret, { expiresIn: '1h' });
 
-		localStorage.setItem('token', token);
+		LocalStorage.setItem('token', token);
 
-		await StoredToken.create({
+		const st_token = new StoredToken({ //actually works now lul
+
 			userId: user._id.toString(),
 			token: token,
 			expiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
 		});
-
+        st_token.save();
         return res.status(200).json({ ok: true, userId: user._id.toString(), name: user.DisplayName, token });
     } catch (err) {
         console.error('login error', err);
@@ -90,7 +99,7 @@ app.post('/api/register', async (req, res) => {
         const db = client.db('COP4331Cards');
 
         // prevent duplicate email
-        const existing = await db.collection('Users').findOne({ Email: email });
+        const existing = await db.collection('Users').findOne({ Email: email }); //make this use mongoose at some point
         if (existing) {
             return res.status(400).json({ error: 'Email already registered' });
         }
