@@ -1,23 +1,26 @@
-app.post('/api/login', async (req, res, next) =>
-{
-// incoming: login, password
-// outgoing: id, firstName, lastName, error
-var error = '';
-const { login, password } = req.body;
-const db = client.db('COP4331');
-const results = await
-db.collection('Users').find({Email:email,Password:password}).toArray(); //honestly the password should be hashed but whatever we ball
-var id = -1;
-var fn = '';
-//var ln = '';
-if( results.length > 0 )
-{
-id = results[0].UserID;
-fn = results[0].DisplayName;
-//
-}
-var ret = { id:id, Name:fn, /*Email:ln,*/ error:''};
-res.status(200).json(ret);
+exports.setApp = function( app, client ) {
+app.post('/api/login', async (req, res) => {
+    try {
+        // Expect { email, password } in body (project uses Email field on users)
+        const { email, password } = req.body;
+        if (!email || !password) return res.status(400).json({ error: 'Missing email or password' });
+
+        const db = client.db('COP4331Cards');
+        // Note: passwords are stored unhashed in this project (not recommended)
+        const user = await db.collection('Users').findOne({ Email: email, Password: password });
+        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+        // Create a JWT for authenticated sessions
+        const jwt = require('jsonwebtoken');
+        const jwtSecret = process.env.JWT_SECRET || 'strongest_secret_evar';
+        const payload = { userId: user._id.toString(), email: user.Email };
+        const token = jwt.sign(payload, jwtSecret, { expiresIn: '7d' });
+
+        return res.status(200).json({ ok: true, userId: user._id.toString(), name: user.DisplayName, token });
+    } catch (err) {
+        console.error('login error', err);
+        return res.status(500).json({ error: 'Login failed' });
+    }
 });
 
 // registration + email verification using jsonwebtoken and nodemailer
@@ -39,12 +42,12 @@ const transporter = nodemailer.createTransport({
 // body: { displayname, email, password }
 app.post('/api/register', async (req, res) => {
     try {
-        const { displayname, email, password } = req.body;
-        if (!displayname || !email || !password) {
-            return res.status(400).json({ error: 'displayname, email and password are required' });
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: 'email and password are required' });
         }
 
-        const db = client.db('COP4331');
+        const db = client.db('COP4331Cards');
 
         // prevent duplicate email
         const existing = await db.collection('Users').findOne({ Email: email });
@@ -54,7 +57,7 @@ app.post('/api/register', async (req, res) => {
 
         // create user (note: no bcrypt used per request)
         const userDoc = {
-            DisplayName: displayname,
+            //DisplayName: displayname,
             Email: email,
             Password: password,
             Verified: false,
@@ -79,8 +82,8 @@ app.post('/api/register', async (req, res) => {
             from: process.env.SMTP_FROM || process.env.SMTP_USER,
             to: email,
             subject: 'Verify your account',
-            text: `Hello ${displayname}, please verify your account: ${verifyUrl}`,
-            html: `<p>Hello ${displayname},</p><p>Please verify your account by clicking <a href="${verifyUrl}">this link</a>.</p>`
+            text: `Hello , please verify your account: ${verifyUrl}`,
+            html: `<p>Hello ,</p><p>Please verify your account by clicking <a href="${verifyUrl}">this link</a>.</p>`
         };
 
         await transporter.sendMail(mailOptions);
@@ -107,7 +110,7 @@ app.post('/api/verify-token', async (req, res) => {
             return res.status(400).json({ error: 'Invalid or expired token' });
         }
 
-        const db = client.db('COP4331');
+        const db = client.db('COP4331Cards');
         const userId = payload.userId;
         if (!ObjectId.isValid(userId)) {
             return res.status(400).json({ error: 'Invalid user id in token' });
@@ -136,7 +139,7 @@ app.post('/api/request-password-reset', async (req, res) => {
         const { email } = req.body;
         if (!email) return res.status(400).json({ error: 'Missing email' });
 
-        const db = client.db('COP4331');
+        const db = client.db('COP4331Cards');
         const user = await db.collection('Users').findOne({ Email: email });
 
         // Always return 200 to avoid leaking whether email exists
@@ -158,8 +161,8 @@ app.post('/api/request-password-reset', async (req, res) => {
             from: process.env.SMTP_FROM || process.env.SMTP_USER,
             to: email,
             subject: 'Reset your password',
-            text: `Hello ${user.DisplayName || ''}, reset your password: ${resetUrl}`,
-            html: `<p>Hello ${user.DisplayName || ''},</p><p>Reset your password by clicking <a href="${resetUrl}">this link</a>. This link expires in 1 hour.</p>`
+            text: `Hello , reset your password: ${resetUrl}`,
+            html: `<p>Hello ,</p><p>Reset your password by clicking <a href="${resetUrl}">this link</a>. This link expires in 1 hour.</p>`
         };
 
         await transporter.sendMail(mailOptions);
@@ -195,7 +198,7 @@ app.post('/api/reset-password', async (req, res) => {
             return res.status(400).json({ error: 'Invalid user id in token' });
         }
 
-        const db = client.db('COP4331');
+        const db = client.db('COP4331Cards');
 
         // Note: per project style no hashing used
         const update = await db.collection('Users').updateOne(
@@ -214,3 +217,4 @@ app.post('/api/reset-password', async (req, res) => {
     }
 });
 
+}

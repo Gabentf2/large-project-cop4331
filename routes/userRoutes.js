@@ -12,13 +12,14 @@ function inTheFuture(date, hours) {
 // POST /api/createEvent
 // Authenticated. Uses token payload.userId as owner.
 // Body: { title, VideoGameID, StartDate?, EndDate? }
-router.post('/api/createEvent', authenticateToken, async (req, res) => {
-    try {
-        const { title, VideoGameID, StartDate, EndDate } = req.body;
-        const tokenUserId = req.user && req.user.userId;
-        if (!tokenUserId) return res.status(401).json({ error: 'Invalid token payload' });
+router.post('/api/createEvent', async (req, res) => {
+    try { //works (tested with ARC)
+        const {  VideoGameID, StartDate, EndDate, OwnerID } = req.body;
+        //const tokenUserId = req.user && req.user.userId;
+        //if (!tokenUserId) return res.status(401).json({ error: 'Invalid token payload' });
+        //dont remember what i was even using tokens for in this. wont bother not needed?
 
-        if (!title || !VideoGameID) {
+        if (!VideoGameID) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
@@ -26,7 +27,7 @@ router.post('/api/createEvent', authenticateToken, async (req, res) => {
         const end = EndDate ? new Date(EndDate) : inTheFuture(start, 2);
 
         const event = new Event({
-            title,
+            //title,
             VideoGameID,
             StartDate: start,
             EndDate: end,
@@ -38,7 +39,7 @@ router.post('/api/createEvent', authenticateToken, async (req, res) => {
         let updatedUser = null;
         try {
             updatedUser = await User.findByIdAndUpdate(
-                tokenUserId,
+                OwnerID,
                 { $push: { OwnedEvents: savedEvent._id } },
                 { new: true }
             );
@@ -56,7 +57,8 @@ router.post('/api/createEvent', authenticateToken, async (req, res) => {
 // DELETE /api/deleteEvent/:eventId
 // Body: { userId }
 // Verifies that the requesting user owns the event (is listed in OwnedEvents) before deleting.
-router.delete('/api/deleteEvent/:eventId', authenticateToken, async (req, res) => {
+//authentication will be delt with later if needed...
+router.delete('/api/deleteEvent/:eventId', /*authenticateToken,*/ async (req, res) => { 
     const { eventId } = req.params;
     const tokenUserId = req.user && req.user.userId;
 
