@@ -49,6 +49,7 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
         // Note: passwords are stored unhashed in this project (not recommended)
         const user = await db.collection('users').findOne({ email: email, password: password });
         if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+        if(!user.Verified) return res.status(401).json({ error: 'Email not verified, please register again!' });
 
         // Create a JWT for authenticated sessions
         const jwt = require('jsonwebtoken');
@@ -76,19 +77,18 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const { ObjectId } = require('mongodb');
-
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.example.com',
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: Number(process.env.SMTP_PORT) === 465, // true for 465
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-    }
-});
+const user = require('./models/user');
+var mg = require('nodemailer-mailgun-transport');
+var auth = {
+  auth: {
+    api_key: process.env.SMTP_PASS,
+    domain: process.env.SMTP_USER
+  }
+};
+const transporter = nodemailer.createTransport(mg(auth));
 
 // POST /api/register
-// body: { displayname, email, password }
+// body: { email, password }
 app.post('/api/register', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -96,14 +96,19 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'email and password are required' });
         }
 
-        const db = client.db('COP4331Cards');
+        //const db = client.db('COP4331Cards');
 
         // prevent duplicate email
-        const existing = await db.collection('Users').findOne({ Email: email }); //make this use mongoose at some point
-        if (existing) {
-            return res.status(400).json({ error: 'Email already registered' });
+        const existing = await user.exists({Email : email}); //make this use mongoose at some point
+        if (existing != null && existing != []) {
+            console.log('existing user found:', existing);
+            const userInQ = await user.findOne({_id: existing});
+            if(userInQ.Verified)
+            {  
+                return res.status(400).json({ error: 'Email already registered' });
+            }
         }
-
+        
       
         //const userDoc = {
             //DisplayName: displayname,
@@ -113,12 +118,20 @@ app.post('/api/register', async (req, res) => {
             //CreatedAt: new Date()
         //};
 		const userDoc = new User({
-			email: email,
-			password: password
+			Email: email,
+			Password: password
 		});
         const savedUser = await userDoc.save();	
         //const userId = insertResult.insertedId; // ObjectId
-
+        const genCode = (len = 6) => {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz0123456789'; // excludes I,O,i,o
+            let out = '';
+            for (let i = 0; i < len; i++) {
+                out += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return out;
+        };
+        const verifyCode = genCode(6);
         // create JWT verification token
         const jwtSecret = process.env.JWT_SECRET || 'even_secreter_secret';
         const token = jwt.sign(
@@ -127,15 +140,13 @@ app.post('/api/register', async (req, res) => {
             { expiresIn: '1d' } // 24 hours
         );
 		//add link to verift page
-        const verifyUrlBase = process.env.FRONTEND_VERIFY_URL || 'http://localhost:3000/verify?token=';
-        const verifyUrl = verifyUrlBase + encodeURIComponent(token);
 		//add gmail stmp server
         const mailOptions = {
             from: process.env.SMTP_FROM || process.env.SMTP_USER,
             to: email,
             subject: 'Verify your account',
-            text: `Hello , please verify your account: ${verifyUrl}`,
-            html: `<p>Hello ,</p><p>Please verify your account by clicking <a href="${verifyUrl}">this link</a>.</p>`
+            text: `Hello,\n\nPlease verify your account using the following verification code:\n\n${verifyCode}\n\nThis code expires in 24 hours.\n\nIf you did not request this, ignore this email.`,
+            html: `<p>Hello,</p><p>Please verify your account using the following verification code:</p><h2>${verifyCode}</h2><p>This code expires in 24 hours.</p>`
         };
 
         await transporter.sendMail(mailOptions);
@@ -149,40 +160,7 @@ app.post('/api/register', async (req, res) => {
 
 // POST /api/verify-token
 // body: { token }
-app.post('/api/verify-token', async (req, res) => {
-    try {
-        const { token } = req.body;
-        if (!token) return res.status(400).json({ error: 'Missing token' });
 
-        const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
-        let payload;
-        try {
-            payload = jwt.verify(token, jwtSecret);
-        } catch (e) {
-            return res.status(400).json({ error: 'Invalid or expired token' });
-        }
-
-        const db = client.db('COP4331Cards');
-        const userId = payload.userId;
-        if (!ObjectId.isValid(userId)) {
-            return res.status(400).json({ error: 'Invalid user id in token' });
-        }
-
-        const update = await db.collection('Users').updateOne(
-            { _id: new ObjectId(userId) },
-            { $set: { Verified: true } }
-        );
-
-        if (update.matchedCount === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.status(200).json({ ok: true });
-    } catch (err) {
-        console.error('verify-token error', err);
-        res.status(500).json({ error: 'Verification failed' });
-    }
-});
 
 // POST /api/request-password-reset
 // body: { email }
@@ -270,6 +248,47 @@ app.post('/api/reset-password', async (req, res) => {
 });
 
 
+/**
+ * Simple verification comparison helper
+ * Returns true only when both are 6-char strings and exactly equal (case-sensitive)
+ */
+function verifyCodes(serverCode, userCode) {
+    if (typeof serverCode !== 'string' || typeof userCode !== 'string') return false;
+    if (serverCode.length !== 6 || userCode.length !== 6) return false;
+    return serverCode === userCode;
+}
+
+// POST /api/verify-code
+// body: { serverCode, userCode }
+// If codes match, find the user referenced by the JWT stored in server local storage
+// and set their Verified flag to true.
+app.post('/api/verify-code', async (req, res) => {
+    try {
+        const { serverCode, userCode } = req.body;
+        if (!serverCode || !userCode) return res.status(400).json({ error: 'Missing serverCode or userCode' });
+
+        if (!verifyCodes(serverCode, userCode)) {
+            return res.status(400).json({ error: 'Verification codes do not match' });
+        }
+
+        const token = LocalStorage.getItem('token');
+        if (!token) return res.status(401).json({ error: 'No token in local storage' });
+
+        const tokenOwner = StoredToken.findOne({ token: token });
+        const userId = tokenOwner ? tokenOwner.userId : null;
+        if (!userId) return res.status(400).json({ error: 'User id not found in token' });
+
+        // Mark user as verified
+        const updated = await User.findByIdAndUpdate(userId, { Verified: true }).exec();
+        if (!updated) return res.status(404).json({ error: 'User not found' });
+
+        return res.status(200).json({ ok: true, userId: updated._id.toString() });
+    } catch (err) {
+        console.error('verify-code error', err);
+        return res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
 	console.log(`Server is running on port ${PORT}`);
@@ -280,4 +299,16 @@ app.listen(PORT, () => {
 	} catch (err) {
 		console.error('Failed to start cleanup scheduler', err);
 	}
+});
+app.get('/api/events', async (req, res) => { //works (?) queries correctly
+    try {
+        console.log('get /api/events called');
+        const db = client.db('COP4331Cards');
+        const events = await db.collection('events').find({}).toArray();
+        // return an array (could be empty)
+        return res.status(200).json(Array.isArray(events) ? events : []);
+    } catch (err) {
+        console.error('get /api/events error', err);
+        return res.status(500).json({ error: 'Failed to load events' });
+    }
 });

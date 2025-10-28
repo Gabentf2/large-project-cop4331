@@ -1,20 +1,18 @@
-import { useState } from 'react'
-import './App.css'
-import AppNavbar from './components/navbar'
+import './App.css';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import HomePage from './pages/homepage';
+import LoginPage from './pages/loginpage';
 
 function App() {
   return (
-    <div className="App">
-      <AppNavbar />
-      {/* rest of your app goes here */
-
-      /* whatever else
-        happens
-        
-      */
-      }
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
-export default App
+export default App;

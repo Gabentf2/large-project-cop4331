@@ -1,5 +1,5 @@
 const Event = require('../models/event');
-
+//proven to work (deleted an event i didnt even want gone)
 /**
  * Delete events whose EndDate is less than or equal to now.
  * Safe to call repeatedly.

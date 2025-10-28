@@ -23,7 +23,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         setLoading(true);
         try {
-            const res = await fetch('/api/login', {
+            const res = await fetch('http://localhost:5000/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
@@ -57,8 +57,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     return (
         <Container className="py-4">
-            <Row className="justify-content-center">
-                <Col xs={12} md={6} lg={4}>
+            <Row className="justify-content-left">
+                <Col xs={12} md={12} lg={12}>
                     <h3 className="mb-3">Sign in</h3>
                     {error && <Alert variant="danger">{error}</Alert>}
 

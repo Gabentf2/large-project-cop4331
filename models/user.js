@@ -14,6 +14,10 @@ required: true
 OwnedEvents: [{
     type: mongoose.Schema.Types.ObjectId,
     //ref: 'Event'
-}]
+}],
+Verified: {
+type: Boolean,
+default: false
+}
 });
 module.exports = user = mongoose.model("Users", UserSchema);
