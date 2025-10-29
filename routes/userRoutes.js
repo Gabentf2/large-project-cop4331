@@ -6,7 +6,7 @@ const authenticateToken = require('../middleware/auth'); //chatgpt garbage that 
 const StoredToken = require('../models/storedToken');
 var LocalStorage = require('node-localstorage').LocalStorage;
 LocalStorage = new LocalStorage('./scratch');
-
+const mongoose = require('mongoose');
 function inTheFuture(date, hours) {
     const toAdd = hours * 60 * 60 * 1000; // hours to milliseconds
     return new Date(date.getTime() + toAdd);
@@ -61,38 +61,55 @@ router.post('/api/createEvent', async (req, res) => {
 // Body: { userId }
 // Verifies that the requesting user owns the event (is listed in OwnedEvents) before deleting.
 //authentication will be delt with later if needed...
-router.delete('/api/deleteEvent/:eventId', /*authenticateToken,*/ async (req, res) => { 
-    const { eventId } = req.params;
+router.delete('/api/deleteEvent/:Eid', /*authenticateToken,*/ async (req, res) => { 
+    //const { eventId } = req.params['Eid'];
+    console.log('Attempting to delete event with id:', req.params['Eid']);
+    /*
     //const tokenUserId = req.user && req.user.userId;
-
+    
     //if (!tokenUserId) return res.status(401).json({ error: 'Invalid token payload' });
     //actual implementation of jwt chatgpt more like uhhhh
-    const foundToken = StoredToken.findOne({ token: localStorage.getItem('token') });
-    if (!foundToken) return res.status(401).json({ error: 'Invalid or missing token' });
+    const foundToken = await StoredToken.findOne({ token: LocalStorage.getItem('token') }).exec();
+    console.log('Looking for token:', LocalStorage.getItem('token'));
+    console.log('Found token:', foundToken._id);
+    if (foundToken.token == undefined) return res.status(401).json({ error: 'Invalid or missing token' });
     else if(foundToken.expiry < new Date()) {
         return res.status(403).json({ error: 'Token expired' });
     }
-    else
-    {
-        const tokenUserId = foundToken.userId;
-    }
+    const tokenUserId = foundToken.userId;
+    */
     try {
         // Find the user
-        const user = await User.findById(tokenUserId);
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        const theUser = await fetch('http://localhost:5000/api/me', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+        });  
+
+        if (!theUser) 
+        {
+            //console.log('User not found for id:', tokenUserId);
+            return res.status(404).json({ error: 'User not found' });
+        } 
 
         // Check ownership (compare as strings to handle ObjectId)
-        const owns = Array.isArray(user.OwnedEvents) && user.OwnedEvents.map(String).includes(String(eventId));
-        if (!owns) return res.status(403).json({ error: 'User does not own this event' });
+        //const owns = Array.isArray(theUser.OwnedEvents) && theUser.OwnedEvents.map(String).includes(String(req.params['Eid']));
+        //if (!owns) return res.status(403).json({ error: 'User does not own this event' });
 
         // Delete the event
-        const deleted = await Event.findByIdAndDelete(eventId);
-        if (!deleted) return res.status(404).json({ error: 'Event not found' });
+        //const eventInQ = await Event.findById(req.params['Eid']);
+        var id = new mongoose.Types.ObjectId(req.params['Eid']);
+        await User.updateOne(theUser._id, { $pull: { OwnedEvents: id } });
+        console.log('now deleting:', req.params['Eid']);
+        const deleted = await Event.findByIdAndDelete(req.params['Eid']);
+        if (!deleted) {
+            console.log('Event not found for id:', req.params['Eid']);
+            return res.status(404).json({ error: 'Event not found' });
+        } 
 
         // Remove the event id from the user's OwnedEvents array
-        await User.findByIdAndUpdate(tokenUserId, { $pull: { OwnedEvents: eventId } });
-
-        return res.json({ message: 'Event deleted' });
+        
+        console.log('Event deleted successfully:', req.params['Eid']);
+        return res.json({ ok: true ,message: 'Event deleted' });
     } catch (err) {
         console.error('deleteEvent error', err);
         return res.status(500).json({ error: 'Internal server error' });

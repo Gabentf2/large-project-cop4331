@@ -25,7 +25,7 @@ const EventList: React.FC = () => {
             if (!res.ok) throw new Error(`Server returned ${res.status}`);
             const data = await res.json();
             const mapped: EventItem[] = (Array.isArray(data) ? data : []).map((item: any) => ({
-                _id: (item.VideoGameID ?? item._id ?? '').toString(),
+                _id: (item._id ?? '').toString(),
                 // use VideoGameID as the title if no explicit title provided
                 Title: item.Title ?? undefined,
                 title: item.Title ?? item.VideoGameID?.toString() ?? 'Untitled',

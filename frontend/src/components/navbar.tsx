@@ -30,6 +30,9 @@ const AppNavbar: React.FC = () => {
       navigate('/login');
     }
   };
+  const sendyoutoMANAGE = () => {
+    navigate('/manage');
+  }
 
   return (
     // fixed="top" makes the navbar stick to the top and span the full width
@@ -48,8 +51,14 @@ const AppNavbar: React.FC = () => {
           />
         </Navbar.Brand>
 
-        {/* right-hand login/logout button */}
-        <div className="ms-auto">
+        {/* right-side controls */}
+        <div className="ms-auto d-flex gap-2">
+          {loggedIn && (
+            <Button onClick={sendyoutoMANAGE} variant="outline-dark" size="sm">
+              Manage Events
+            </Button>
+          )}
+
           <Button onClick={handleAuthClick} variant="outline-dark" size="sm">
             {loggedIn ? 'Logout' : 'Login'}
           </Button>

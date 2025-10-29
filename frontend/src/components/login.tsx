@@ -11,6 +11,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isRegister, setIsRegister] = useState<boolean>(false);
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -23,32 +24,44 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:5000/api/login', {
+            const endpoint = isRegister ? 'http://localhost:5000/api/register' : 'http://localhost:5000/api/login';
+            const body = isRegister
+                ? { displayname: email.split('@')[0] || '', email, password }
+                : { email, password };
+
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify(body),
             });
 
             const data = await res.json();
             if (!res.ok) {
-                setError(data.error || 'Login failed');
+                setError(data.error || (isRegister ? 'Registration failed' : 'Login failed'));
                 setLoading(false);
                 return;
             }
 
-            // Expect server to return { token, userId, name }
+            // If registering, server may return ok/result — attempt to log in if token provided
             if (data.token) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('userId', data.userId || '');
                 localStorage.setItem('userName', data.name || '');
                 if (onLogin) onLogin(data.token);
-                // Navigate to home or dashboard
                 navigate('/');
+                return;
+            }
+
+            // If registration succeeded but no token returned, inform the user
+            if (isRegister) {
+                navigate('/login');
+                setError(null);
+                alert('Registration successful. Please check your email for verification instructions.');
             } else {
                 setError('Login succeeded but token was not returned');
             }
         } catch (err) {
-            console.error('Login error', err);
+            console.error('Auth error', err);
             setError('Network error');
         } finally {
             setLoading(false);
@@ -59,7 +72,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <Container className="py-4">
             <Row className="justify-content-left">
                 <Col xs={12} md={12} lg={12}>
-                    <h3 className="mb-3">Sign in</h3>
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                        <h3 className="m-0">{isRegister ? 'Register' : 'Sign in'}</h3>
+                        {/* Toggle button to flip isRegister */}
+                        <Button
+                            variant={isRegister ? 'outline-primary' : 'secondary'}
+                            size="sm"
+                            onClick={() => setIsRegister(prev => !prev)}
+                        >
+                            {isRegister ? 'Switch to Login' : 'Switch to Register'}
+                        </Button>
+                    </div>
+
                     {error && <Alert variant="danger">{error}</Alert>}
 
                     <Form onSubmit={handleSubmit}>
@@ -89,8 +113,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             <Button variant="primary" type="submit" disabled={loading}>
                                 {loading ? (
                                     <>
-                                        <Spinner animation="border" size="sm" /> Signing in...
+                                        <Spinner animation="border" size="sm" /> {isRegister ? 'Registering...' : 'Signing in...'}
                                     </>
+                                ) : isRegister ? (
+                                    'Register'
                                 ) : (
                                     'Sign in'
                                 )}

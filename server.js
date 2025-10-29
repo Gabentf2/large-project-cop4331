@@ -21,7 +21,7 @@ LocalStorage = new LocalStorage('./scratch'); //this will need to be addressed w
 
 //models
 const StoredToken = require('./models/storedToken');
-const User = require('./models/user');
+const user = require('./models/user');
 const Event = require('./models/event');
 
 const app = express();
@@ -45,28 +45,39 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
         const { email, password } = req.body;
         if (!email || !password) return res.status(400).json({ error: 'Missing email or password' });
 
-        const db = client.db('COP4331Cards');
+        //const db = client.db('COP4331Cards');
         // Note: passwords are stored unhashed in this project (not recommended)
-        const user = await db.collection('users').findOne({ email: email, password: password });
-        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-        if(!user.Verified) return res.status(401).json({ error: 'Email not verified, please register again!' });
+        const LogUser = await user.find({ Email: email,  Password: password });
+        if (!LogUser) return res.status(401).json({ error: 'Invalid credentials' });
+        if(LogUser.Verified == false) return res.status(401).json({ error: 'Email not verified, please register again!' });
 
         // Create a JWT for authenticated sessions
         const jwt = require('jsonwebtoken');
         const jwtSecret = process.env.JWT_SECRET || 'strongest_secret_evar';
-        const payload = { userId: user._id.toString(), email: user.Email };
-        const token = jwt.sign(payload, jwtSecret, { expiresIn: '1h' });
+        //const payload = { userId: LogUser._id.toString(), email: LogUser.Email };
+        const token = jwt.sign(
+            { email },
+            jwtSecret,
+            { expiresIn: '1d' } // 24 hours
+        );
 
 		LocalStorage.setItem('token', token);
 
 		const st_token = new StoredToken({ //actually works now lul
-
-			userId: user._id.toString(),
-			token: token,
+            token: token,
+			userId: await user.exists({Email : email}),
 			expiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
 		});
-        st_token.save();
-        return res.status(200).json({ ok: true, userId: user._id.toString(), name: user.DisplayName, token });
+        const ifSaved = await StoredToken.exists({userId : st_token.userId});
+        if(!ifSaved)
+        {
+            await st_token.save();
+        }
+        else
+        {
+            await StoredToken.findOneAndUpdate({userId : st_token.userId}, {$set:{token: st_token.token, expiry: new Date(Date.now() + 60 * 60 * 1000)}});
+        }
+        return res.status(200).json({ ok: true, userId: LogUser._id, name: LogUser.email, token });
     } catch (err) {
         console.error('login error', err);
         return res.status(500).json({ error: 'Login failed' });
@@ -77,8 +88,8 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const { ObjectId } = require('mongodb');
-const user = require('./models/user');
 var mg = require('nodemailer-mailgun-transport');
+const { useResolvedPath } = require('react-router-dom');
 var auth = {
   auth: {
     api_key: process.env.SMTP_PASS,
@@ -311,4 +322,33 @@ app.get('/api/events', async (req, res) => { //works (?) queries correctly
         console.error('get /api/events error', err);
         return res.status(500).json({ error: 'Failed to load events' });
     }
+});
+
+// GET /api/me
+// Read token from server LocalStorage, look up StoredToken in MongoDB, check expiry,
+// then return the associated user (without password).
+app.get('/api/me', async (req, res) => {
+    console.log('GET /api/me called');
+  try {
+    const tk = LocalStorage.getItem('token');
+    if (!tk) return res.status(401).json({ error: 'Missing token' });
+
+    const stored = await StoredToken.findOne({ token: tk }).exec();
+    if (!stored) return res.status(401).json({ error: 'Token not found' });
+
+    if (stored.expiry && new Date(stored.expiry) < new Date()) {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+
+    const userId = stored.userId;
+    if (!userId) return res.status(400).json({ error: 'Token has no user association' });
+
+    const found = await user.findById(userId).select('-Password -__v').lean().exec();
+    if (!found) return res.status(404).json({ error: 'User not found' });
+
+    return res.status(200).json(found);
+  } catch (err) {
+    console.error('GET /api/me error', err);
+    return res.status(500).json({ error: 'Failed to fetch user' });
+  }
 });
