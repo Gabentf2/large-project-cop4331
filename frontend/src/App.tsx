@@ -4,6 +4,7 @@ import HomePage from './pages/homepage';
 import LoginPage from './pages/loginpage';
 import ManagePage from './pages/managepage';
 import EventAddPage from './pages/addEvent';
+import VerifyPage from './pages/verifypage';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/manage" element={<ManagePage />} />
         <Route path="/addEvent" element={<EventAddPage />} />
+        <Route path="/verify" element={<VerifyPage />} />
       </Routes>
     </BrowserRouter>
     

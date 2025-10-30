@@ -47,8 +47,9 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
 
         //const db = client.db('COP4331Cards');
         // Note: passwords are stored unhashed in this project (not recommended)
-        const LogUser = await user.find({ Email: email,  Password: password });
-        if (!LogUser) return res.status(401).json({ error: 'Invalid credentials' });
+        const LogUser = await user.findOne({ Email: email,  Password: password });
+        if (LogUser == undefined) return res.status(401).json({ error: 'Invalid credentials' });
+        console.log(LogUser.Verified);
         if(LogUser.Verified == false) return res.status(401).json({ error: 'Email not verified, please register again!' });
 
         // Create a JWT for authenticated sessions
@@ -88,15 +89,15 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const { ObjectId } = require('mongodb');
-var mg = require('nodemailer-mailgun-transport');
-const { useResolvedPath } = require('react-router-dom');
-var auth = {
-  auth: {
-    api_key: process.env.SMTP_PASS,
-    domain: process.env.SMTP_USER
-  }
-};
-const transporter = nodemailer.createTransport(mg(auth));
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
+
 
 // POST /api/register
 // body: { email, password }
@@ -128,7 +129,7 @@ app.post('/api/register', async (req, res) => {
             //Verified: false,
             //CreatedAt: new Date()
         //};
-		const userDoc = new User({
+		const userDoc = new user({
 			Email: email,
 			Password: password
 		});
@@ -159,10 +160,10 @@ app.post('/api/register', async (req, res) => {
             text: `Hello,\n\nPlease verify your account using the following verification code:\n\n${verifyCode}\n\nThis code expires in 24 hours.\n\nIf you did not request this, ignore this email.`,
             html: `<p>Hello,</p><p>Please verify your account using the following verification code:</p><h2>${verifyCode}</h2><p>This code expires in 24 hours.</p>`
         };
-
+        LocalStorage.setItem('verifyCode', verifyCode);
         await transporter.sendMail(mailOptions);
 
-        res.status(201).json({ ok: true, userId: userId.toString() });
+        res.status(201).json({ ok: true });
     } catch (err) {
         console.error('register error', err);
         res.status(500).json({ error: 'Registration failed' });
@@ -275,25 +276,33 @@ function verifyCodes(serverCode, userCode) {
 // and set their Verified flag to true.
 app.post('/api/verify-code', async (req, res) => {
     try {
-        const { serverCode, userCode } = req.body;
+        const { userCode } = req.body;
+        console.log('verify-code called with userCode:', userCode);
+        const serverCode = LocalStorage.getItem('verifyCode');
+        console.log('serverCode from local storage:', serverCode);
         if (!serverCode || !userCode) return res.status(400).json({ error: 'Missing serverCode or userCode' });
 
         if (!verifyCodes(serverCode, userCode)) {
             return res.status(400).json({ error: 'Verification codes do not match' });
         }
 
-        const token = LocalStorage.getItem('token');
-        if (!token) return res.status(401).json({ error: 'No token in local storage' });
+        //if (!tk) return res.status(401).json({ error: 'No token in local storage' });
 
-        const tokenOwner = StoredToken.findOne({ token: token });
-        const userId = tokenOwner ? tokenOwner.userId : null;
-        if (!userId) return res.status(400).json({ error: 'User id not found in token' });
+        //const tokenOwner = StoredToken.findOne({ token: tk });
+        const Fuser = await fetch('http://localhost:5000/api/me', {
+            method: 'GET',
+        });
+        if (!Fuser) return res.status(400).json({ error: 'User id not found in token' });
 
         // Mark user as verified
-        const updated = await User.findByIdAndUpdate(userId, { Verified: true }).exec();
+        const updated = await user.findOneAndUpdate(
+            { _id: Fuser.userId },
+            { $set: { Verified: true } },
+            { new: true }
+        ).exec();
         if (!updated) return res.status(404).json({ error: 'User not found' });
 
-        return res.status(200).json({ ok: true, userId: updated._id.toString() });
+        return res.status(200).json({ ok: true});
     } catch (err) {
         console.error('verify-code error', err);
         return res.status(500).json({ error: 'Verification failed' });
