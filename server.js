@@ -112,9 +112,9 @@ app.post('/api/register', async (req, res) => {
 
         // prevent duplicate email
         const existing = await user.exists({Email : email}); //make this use mongoose at some point
-        if (existing != null && existing != []) {
+        if (await user.exists({Email : email})) {
             console.log('existing user found:', existing);
-            const userInQ = await user.findOne({_id: existing});
+            const userInQ = await user.findOne({Email: email});
             if(userInQ.Verified)
             {  
                 return res.status(400).json({ error: 'Email already registered' });
@@ -181,34 +181,42 @@ app.post('/api/request-password-reset', async (req, res) => {
         const { email } = req.body;
         if (!email) return res.status(400).json({ error: 'Missing email' });
 
-        const db = client.db('COP4331Cards');
-        const user = await db.collection('Users').findOne({ Email: email });
+        const f_user = await user.findOne({ Email: email });
 
         // Always return 200 to avoid leaking whether email exists
-        if (!user) {
+        if (!f_user) {
             return res.status(200).json({ ok: true });
         }
 
-        const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
-        const token = jwt.sign(
-            { userId: user._id.toString(), purpose: 'password_reset' },
-            jwtSecret,
-            { expiresIn: '1h' } // short expiry
-        );
+        //const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
+        //const token = jwt.sign(
+        //    { userId: user._id.toString(), purpose: 'password_reset' },
+        //    jwtSecret,
+        //    { expiresIn: '1h' } // short expiry
+        //);
 
-        const resetUrlBase = process.env.FRONTEND_RESET_URL || 'http://localhost:3000/reset-password?token=';
-        const resetUrl = resetUrlBase + encodeURIComponent(token);
-
+        //const resetUrlBase = process.env.FRONTEND_RESET_URL || 'http://localhost:3000/reset-password?token=';
+        //const resetUrl = resetUrlBase + encodeURIComponent(token);
+        const resetCode = (len = 6) => {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz0123456789'; // excludes I,O,i,o
+            let out = '';
+            for (let i = 0; i < len; i++) {
+                out += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return out;
+        };
+        const code = resetCode(6);
         const mailOptions = {
             from: process.env.SMTP_FROM || process.env.SMTP_USER,
             to: email,
             subject: 'Reset your password',
-            text: `Hello , reset your password: ${resetUrl}`,
-            html: `<p>Hello ,</p><p>Reset your password by clicking <a href="${resetUrl}">this link</a>. This link expires in 1 hour.</p>`
+            text: `Hello , Navigate to the "reset password" page on the site and input this code to continue: ${code}.`,
+            html: `<p>Hello,</p><p>Navigate to the "reset password" page on the site and input this code to continue: <strong>${code}</strong>.</p>`
         };
 
         await transporter.sendMail(mailOptions);
-
+        LocalStorage.setItem('resetCode', code);
+        LocalStorage.setItem('resetUserEmail', email);
         res.status(200).json({ ok: true });
     } catch (err) {
         console.error('request-password-reset error', err);
@@ -220,37 +228,24 @@ app.post('/api/request-password-reset', async (req, res) => {
 // body: { token, newPassword }
 app.post('/api/reset-password', async (req, res) => {
     try {
-        const { token, newPassword } = req.body;
-        if (!token || !newPassword) return res.status(400).json({ error: 'Missing token or newPassword' });
+        const { code, newPassword } = req.body;
+        if (!code || !newPassword) return res.status(400).json({ error: 'Missing reset code or newPassword' });
 
-        const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
-        let payload;
-        try {
-            payload = jwt.verify(token, jwtSecret);
-        } catch (e) {
-            return res.status(400).json({ error: 'Invalid or expired token' });
+        const serverCode = LocalStorage.getItem('resetCode');
+        if (!serverCode || code !== serverCode) {
+            return res.status(400).json({ error: 'Invalid or expired code' });
         }
 
-        if (payload.purpose !== 'password_reset' || !payload.userId) {
-            return res.status(400).json({ error: 'Invalid token' });
-        }
 
-        const userId = payload.userId;
-        if (!ObjectId.isValid(userId)) {
-            return res.status(400).json({ error: 'Invalid user id in token' });
-        }
-
-        const db = client.db('COP4331Cards');
+        const email = LocalStorage.getItem('resetUserEmail');
+        if (!email) return res.status(400).json({ error: 'No email associated with reset request' });
 
         // Note: per project style no hashing used
-        const update = await db.collection('Users').updateOne(
-            { _id: new ObjectId(userId) },
-            { $set: { Password: newPassword, PasswordResetAt: new Date() } }
-        );
-
-        if (update.matchedCount === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const update = await user.findOneAndUpdate(
+            { Email: email },
+            { $set: { Password: newPassword } }
+        ).exec();
+        if (!update) return res.status(404).json({ error: 'User not found' });
 
         res.status(200).json({ ok: true });
     } catch (err) {

@@ -5,6 +5,8 @@ import LoginPage from './pages/loginpage';
 import ManagePage from './pages/managepage';
 import EventAddPage from './pages/addEvent';
 import VerifyPage from './pages/verifypage';
+import RequestResetPage from './pages/request-reset';
+import ResetPage from './pages/reset';
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
         <Route path="/manage" element={<ManagePage />} />
         <Route path="/addEvent" element={<EventAddPage />} />
         <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/request-reset" element={<RequestResetPage />} />
+        <Route path="/reset-password" element={<ResetPage />} />
       </Routes>
     </BrowserRouter>
     

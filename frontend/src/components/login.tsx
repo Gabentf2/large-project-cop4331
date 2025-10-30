@@ -122,6 +122,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 )}
                             </Button>
                         </div>
+                        <div className="mt-3 text-center">
+                            {!isRegister && (
+                                <Button variant="link" onClick={() => navigate('/request-reset')}>
+                                    Forgot Password?
+                                </Button>
+                            )}
+                        </div>
                     </Form>
                 </Col>
             </Row>

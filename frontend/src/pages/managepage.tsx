@@ -3,7 +3,7 @@ import { Container, Row, Col, Spinner, Alert, Modal, Button } from 'react-bootst
 import AppNavbar from '../components/navbar';
 import Event from '../components/Event';
 import { useNavigate } from 'react-router-dom';
-import type { ObjectId } from 'mongodb';
+
 
 type EventItem = {
   _id: string;
