@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Form, Button, Alert, Spinner, Container, Row, Col } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 interface VerifyProps {
     onVerify?: () => void;
@@ -10,6 +11,7 @@ const Verify: React.FC<VerifyProps> = ({ onVerify }) => {
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const email = useParams().email;
     const navigate = useNavigate();
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,7 +22,7 @@ const Verify: React.FC<VerifyProps> = ({ onVerify }) => {
         }
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:5000/api/verify-code', {
+            const res = await fetch(`http://localhost:5000/api/verify-code/${email}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userCode: code }),

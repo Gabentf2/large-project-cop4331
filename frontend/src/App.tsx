@@ -17,7 +17,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/manage" element={<ManagePage />} />
         <Route path="/addEvent" element={<EventAddPage />} />
-        <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/verify/:email" element={<VerifyPage />} />
         <Route path="/request-reset" element={<RequestResetPage />} />
         <Route path="/reset-password" element={<ResetPage />} />
       </Routes>

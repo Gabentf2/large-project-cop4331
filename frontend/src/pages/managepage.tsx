@@ -38,11 +38,14 @@ const ManagePage: React.FC = () => {
         }
 
         // fetch current user via /api/me
-        const meRes = await fetch('http://localhost:5000/api/me', {
-          method: 'GET',
-          //headers: { Authorization: `Bearer ${token}` },
-          signal
-        });
+      const meRes = await fetch('http://localhost:5000/api/me', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          Token: token
+          //userID: LocalStorage.getItem
+        }),
+      });
         
         if (!meRes.ok) {
           if (meRes.status === 401) {

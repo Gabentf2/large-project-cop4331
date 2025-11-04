@@ -43,11 +43,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             }
 
             // If registering, server may return ok/result — attempt to log in if token provided
-            if (data.token) {
-                localStorage.setItem('token', data.token);
+            if (data.Token) {
+                localStorage.setItem('token', data.Token);
                 localStorage.setItem('userId', data.userId || '');
                 localStorage.setItem('userName', data.name || '');
-                if (onLogin) onLogin(data.token);
+                if (onLogin) onLogin(data.Token);
                 navigate('/');
                 return;
             }
@@ -57,6 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 navigate('/login');
                 setError(null);
                 alert('Registration successful. Please check your email for verification instructions.');
+                navigate(`/verify/${email}`);
             } else {
                 setError('Login succeeded but token was not returned');
             }

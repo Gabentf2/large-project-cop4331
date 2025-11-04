@@ -26,7 +26,8 @@ const EventManage: React.FC<Props> = ({ onCreated }) => {
     }
 
     const token = localStorage.getItem('token');
-    if (!token) {
+    //console.debug(token);
+    if (token == undefined) {
       setError('You must be logged in to create events.');
       return;
     }
@@ -35,7 +36,13 @@ const EventManage: React.FC<Props> = ({ onCreated }) => {
 
     try {
       // create event
-      const res_user = await fetch('http://localhost:5000/api/me');
+      const res_user = await fetch('http://localhost:5000/api/me', {
+        method: 'POST',
+        body: JSON.stringify({
+          Token : token
+        })
+        
+      });
       const st_user = await res_user.json();    
       const createRes = await fetch('http://localhost:5000/api/createEvent', {
         method: 'POST',

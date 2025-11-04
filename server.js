@@ -19,6 +19,9 @@ const { startCleanup } = require('./utils/cleanup');
 var LocalStorage = require('node-localstorage').LocalStorage;
 LocalStorage = new LocalStorage('./scratch'); //this will need to be addressed when deploying probably
 
+
+
+
 //models
 const StoredToken = require('./models/storedToken');
 const user = require('./models/user');
@@ -62,7 +65,7 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
             { expiresIn: '1d' } // 24 hours
         );
 
-		LocalStorage.setItem('token', token);
+		//LocalStorage.setItem('token', token);
 
 		const st_token = new StoredToken({ //actually works now lul
             token: token,
@@ -78,7 +81,8 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
         {
             await StoredToken.findOneAndUpdate({userId : st_token.userId}, {$set:{token: st_token.token, expiry: new Date(Date.now() + 60 * 60 * 1000)}});
         }
-        return res.status(200).json({ ok: true, userId: LogUser._id, name: LogUser.email, token });
+        return res.status(200).json({ ok: true, userId: LogUser._id, name: LogUser.email, Token: token });
+        console.log('login successful for user:', token);
     } catch (err) {
         console.error('login error', err);
         return res.status(500).json({ error: 'Login failed' });
@@ -120,7 +124,7 @@ app.post('/api/register', async (req, res) => {
                 return res.status(400).json({ error: 'Email already registered' });
             }
         }
-        
+        //console.log('no existing user, proceeding with registration');
       
         //const userDoc = {
             //DisplayName: displayname,
@@ -133,7 +137,12 @@ app.post('/api/register', async (req, res) => {
 			Email: email,
 			Password: password
 		});
-        const savedUser = await userDoc.save();	
+        const savedUser = await user.findOneAndUpdate(
+            { Email: email },
+            { $setOnInsert: userDoc }, 
+            { upsert: true, new: true }
+        ).exec();
+        //const insertResult = await db.collection('users').insertOne(userDoc);	
         //const userId = insertResult.insertedId; // ObjectId
         const genCode = (len = 6) => {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz0123456789'; // excludes I,O,i,o
@@ -145,12 +154,23 @@ app.post('/api/register', async (req, res) => {
         };
         const verifyCode = genCode(6);
         // create JWT verification token
-        const jwtSecret = process.env.JWT_SECRET || 'even_secreter_secret';
+        const jwt = require('jsonwebtoken');
+        const jwtSecret = process.env.JWT_SECRET || 'strongest_secret_evar';
         const token = jwt.sign(
             { email },
             jwtSecret,
             { expiresIn: '1d' } // 24 hours
         );
+
+		//LocalStorage.setItem('token', token);
+
+		const st_token = new StoredToken({ //actually works now lul
+            token: token,
+			userId: await user.exists({Email : email}),
+			expiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+		});
+        LocalStorage.setItem('token', token);
+        await st_token.save();
 		//add link to verift page
 		//add gmail stmp server
         const mailOptions = {
@@ -269,9 +289,10 @@ function verifyCodes(serverCode, userCode) {
 // body: { serverCode, userCode }
 // If codes match, find the user referenced by the JWT stored in server local storage
 // and set their Verified flag to true.
-app.post('/api/verify-code', async (req, res) => {
+app.post('/api/verify-code/:Email', async (req, res) => {
     try {
         const { userCode } = req.body;
+        const { E_id } = req.params['Email'];
         console.log('verify-code called with userCode:', userCode);
         const serverCode = LocalStorage.getItem('verifyCode');
         console.log('serverCode from local storage:', serverCode);
@@ -284,16 +305,15 @@ app.post('/api/verify-code', async (req, res) => {
         //if (!tk) return res.status(401).json({ error: 'No token in local storage' });
 
         //const tokenOwner = StoredToken.findOne({ token: tk });
-        const Fuser = await fetch('http://localhost:5000/api/me', {
-            method: 'GET',
-        });
-        if (!Fuser) return res.status(400).json({ error: 'User id not found in token' });
-
+        //const Fuser = await fetch('http://localhost:5000/api/me', {
+        //    method: 'GET',
+        //});
+        //if (!Fuser) return res.status(400).json({ error: 'User id not found in token' });
+        console.log('Finding user with email:', req.params['Email']);
         // Mark user as verified
         const updated = await user.findOneAndUpdate(
-            { _id: Fuser.userId },
-            { $set: { Verified: true } },
-            { new: true }
+            { Email: req.params['Email'] },
+            { $set: { Verified: true } }
         ).exec();
         if (!updated) return res.status(404).json({ error: 'User not found' });
 
@@ -331,23 +351,26 @@ app.get('/api/events', async (req, res) => { //works (?) queries correctly
 // GET /api/me
 // Read token from server LocalStorage, look up StoredToken in MongoDB, check expiry,
 // then return the associated user (without password).
-app.get('/api/me', async (req, res) => {
+app.post('/api/me', async (req, res) => {
     console.log('GET /api/me called');
   try {
-    const tk = LocalStorage.getItem('token');
+    if(!req.body) return res.status(401).json({error: 'bad request'});
+    const tk = req.body.Token;
+    console.log(tk);
     if (!tk) return res.status(401).json({ error: 'Missing token' });
 
     const stored = await StoredToken.findOne({ token: tk }).exec();
-    if (!stored) return res.status(401).json({ error: 'Token not found' });
+    if (!stored) return res.status(401).json({ error: 'Token not found or expired' });
 
     if (stored.expiry && new Date(stored.expiry) < new Date()) {
       return res.status(401).json({ error: 'Token expired' });
     }
-
+    //console.log('will find');
     const userId = stored.userId;
     if (!userId) return res.status(400).json({ error: 'Token has no user association' });
+    //console.log('loadin: ', userId);
 
-    const found = await user.findById(userId).select('-Password -__v').lean().exec();
+    const found = await user.findOne( {_id: userId });
     if (!found) return res.status(404).json({ error: 'User not found' });
 
     return res.status(200).json(found);
