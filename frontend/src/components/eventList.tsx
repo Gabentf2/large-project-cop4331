@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Container, Row, Col, Spinner, Alert, Button } from 'react-bootstrap';
 import Event from './Event';
+import { buildPath } from './Path';
 
 type EventItem = {
     _id: string;
@@ -16,7 +17,7 @@ const EventList: React.FC = () => {
     const [events, setEvents] = useState<EventItem[] | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const fetchUrl = 'http://localhost:5000/api/events'; // adjust if your API path differs
+    const fetchUrl = buildPath('api/events'); // adjust if your API path differs
     const load = async (signal?: AbortSignal) => {
         setLoading(true);
         setError(null);

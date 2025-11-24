@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { buildPath } from './Path';
 
 interface Props {
   onCreated?: (event: any) => void; // optional callback so parent can refresh list
@@ -36,7 +37,7 @@ const EventManage: React.FC<Props> = ({ onCreated }) => {
 
     try {
       // create event
-      const res_user = await fetch('http://localhost:5000/api/me', {
+      const res_user = await fetch(buildPath('api/me'), {
         method: 'POST',
         body: JSON.stringify({
           Token : token
@@ -44,7 +45,7 @@ const EventManage: React.FC<Props> = ({ onCreated }) => {
         
       });
       const st_user = await res_user.json();    
-      const createRes = await fetch('http://localhost:5000/api/createEvent', {
+      const createRes = await fetch(buildPath('api/createEvent'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

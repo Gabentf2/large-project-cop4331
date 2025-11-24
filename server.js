@@ -19,9 +19,14 @@ const { startCleanup } = require('./utils/cleanup');
 var LocalStorage = require('node-localstorage').LocalStorage;
 LocalStorage = new LocalStorage('./scratch'); //this will need to be addressed when deploying probably
 
+var Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(FormData);
 
-
-
+const mailgunClient = mailgun.client({
+    username: 'api',
+    key: process.env.MAILGUN_API_KEY,
+    url: 'https://api.mailgun.net/'
+});
 //models
 const StoredToken = require('./models/storedToken');
 const user = require('./models/user');
@@ -47,7 +52,6 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
         // Expect { email, password } in body (project uses Email field on users)
         const { email, password } = req.body;
         if (!email || !password) return res.status(400).json({ error: 'Missing email or password' });
-
         //const db = client.db('COP4331Cards');
         // Note: passwords are stored unhashed in this project (not recommended)
         const LogUser = await user.findOne({ Email: email,  Password: password });
@@ -57,7 +61,7 @@ app.post('/api/login', async (req, res) => { //works (tested in arc)
 
         // Create a JWT for authenticated sessions
         const jwt = require('jsonwebtoken');
-        const jwtSecret = process.env.JWT_SECRET || 'strongest_secret_evar';
+        const jwtSecret = process.env.JWT_SECRET;
         //const payload = { userId: LogUser._id.toString(), email: LogUser.Email };
         const token = jwt.sign(
             { email },
@@ -94,13 +98,7 @@ const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const { ObjectId } = require('mongodb');
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
+
 
 
 // POST /api/register
@@ -124,15 +122,6 @@ app.post('/api/register', async (req, res) => {
                 return res.status(400).json({ error: 'Email already registered' });
             }
         }
-        //console.log('no existing user, proceeding with registration');
-      
-        //const userDoc = {
-            //DisplayName: displayname,
-        //    Email: email,
-        //    Password: password,
-            //Verified: false,
-            //CreatedAt: new Date()
-        //};
 		const userDoc = new user({
 			Email: email,
 			Password: password
@@ -142,8 +131,6 @@ app.post('/api/register', async (req, res) => {
             { $setOnInsert: userDoc }, 
             { upsert: true, new: true }
         ).exec();
-        //const insertResult = await db.collection('users').insertOne(userDoc);	
-        //const userId = insertResult.insertedId; // ObjectId
         const genCode = (len = 6) => {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz0123456789'; // excludes I,O,i,o
             let out = '';
@@ -155,7 +142,7 @@ app.post('/api/register', async (req, res) => {
         const verifyCode = genCode(6);
         // create JWT verification token
         const jwt = require('jsonwebtoken');
-        const jwtSecret = process.env.JWT_SECRET || 'strongest_secret_evar';
+        const jwtSecret = process.env.JWT_SECRET;
         const token = jwt.sign(
             { email },
             jwtSecret,
@@ -169,33 +156,29 @@ app.post('/api/register', async (req, res) => {
 			userId: await user.exists({Email : email}),
 			expiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
 		});
-        LocalStorage.setItem('token', token);
-        await st_token.save();
-		//add link to verift page
-		//add gmail stmp server
-        const mailOptions = {
-            from: process.env.SMTP_FROM || process.env.SMTP_USER,
-            to: email,
-            subject: 'Verify your account',
-            text: `Hello,\n\nPlease verify your account using the following verification code:\n\n${verifyCode}\n\nThis code expires in 24 hours.\n\nIf you did not request this, ignore this email.`,
-            html: `<p>Hello,</p><p>Please verify your account using the following verification code:</p><h2>${verifyCode}</h2><p>This code expires in 24 hours.</p>`
+        //LocalStorage.setItem('token', token);
+        const token_succ = await st_token.save();
+        if(!token_succ) return res.status(400).json({error: "could not save token"});
+        const messageData = {
+        from: process.env.MAILGUN_ADDRESS,
+        to: email,
+        subject: 'Register your account!',
+        text: 'use this code ' + verifyCode.toString() + ' to verify your account'
         };
-        LocalStorage.setItem('verifyCode', verifyCode);
-        await transporter.sendMail(mailOptions);
-
-        res.status(201).json({ ok: true });
+        mailgunClient.messages.create(process.env.MAILGUN_DOMAIN, messageData)
+        .then(res => {
+            console.log(res);
+        })
+        .catch(err => {
+            console.error(err);
+        });
+        res.status(201).json({ ok: true, Token: token, verify: verifyCode });
     } catch (err) {
         console.error('register error', err);
         res.status(500).json({ error: 'Registration failed' });
     }
 });
 
-// POST /api/verify-token
-// body: { token }
-
-
-// POST /api/request-password-reset
-// body: { email }
 app.post('/api/request-password-reset', async (req, res) => {
     try {
         const { email } = req.body;
@@ -207,16 +190,6 @@ app.post('/api/request-password-reset', async (req, res) => {
         if (!f_user) {
             return res.status(200).json({ ok: true });
         }
-
-        //const jwtSecret = process.env.JWT_SECRET || 'replace_this_with_strong_secret';
-        //const token = jwt.sign(
-        //    { userId: user._id.toString(), purpose: 'password_reset' },
-        //    jwtSecret,
-        //    { expiresIn: '1h' } // short expiry
-        //);
-
-        //const resetUrlBase = process.env.FRONTEND_RESET_URL || 'http://localhost:3000/reset-password?token=';
-        //const resetUrl = resetUrlBase + encodeURIComponent(token);
         const resetCode = (len = 6) => {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz0123456789'; // excludes I,O,i,o
             let out = '';
@@ -226,18 +199,21 @@ app.post('/api/request-password-reset', async (req, res) => {
             return out;
         };
         const code = resetCode(6);
-        const mailOptions = {
-            from: process.env.SMTP_FROM || process.env.SMTP_USER,
-            to: email,
-            subject: 'Reset your password',
-            text: `Hello , Navigate to the "reset password" page on the site and input this code to continue: ${code}.`,
-            html: `<p>Hello,</p><p>Navigate to the "reset password" page on the site and input this code to continue: <strong>${code}</strong>.</p>`
+        const messageData = {
+        from: process.env.MAILGUN_ADDRESS,
+        to: email,
+        subject: 'Reset your password',
+        text: 'use this code ' + code.toString() + ' to verify your account'
         };
-
-        await transporter.sendMail(mailOptions);
-        LocalStorage.setItem('resetCode', code);
-        LocalStorage.setItem('resetUserEmail', email);
-        res.status(200).json({ ok: true });
+        mailgunClient.messages.create(process.env.MAILGUN_DOMAIN, messageData)
+        .then(res => {
+            console.log(res);
+        })
+        .catch(err => {
+            console.error(err);
+        });
+        //await transporter.sendMail(mailOptions);
+        res.status(200).json({ ok: true, resetCode: code });
     } catch (err) {
         console.error('request-password-reset error', err);
         res.status(500).json({ error: 'Failed to request password reset' });
@@ -248,16 +224,16 @@ app.post('/api/request-password-reset', async (req, res) => {
 // body: { token, newPassword }
 app.post('/api/reset-password', async (req, res) => {
     try {
-        const { code, newPassword } = req.body;
+        const { code, newPassword, email, serverCode } = req.body;
         if (!code || !newPassword) return res.status(400).json({ error: 'Missing reset code or newPassword' });
 
-        const serverCode = LocalStorage.getItem('resetCode');
+        //const serverCode = LocalStorage.getItem('resetCode');
         if (!serverCode || code !== serverCode) {
             return res.status(400).json({ error: 'Invalid or expired code' });
         }
 
 
-        const email = LocalStorage.getItem('resetUserEmail');
+        //const email = LocalStorage.getItem('resetUserEmail');
         if (!email) return res.status(400).json({ error: 'No email associated with reset request' });
 
         // Note: per project style no hashing used
@@ -291,24 +267,16 @@ function verifyCodes(serverCode, userCode) {
 // and set their Verified flag to true.
 app.post('/api/verify-code/:Email', async (req, res) => {
     try {
-        const { userCode } = req.body;
+        const { userCode, verifyCode } = req.body;
         const { E_id } = req.params['Email'];
         console.log('verify-code called with userCode:', userCode);
-        const serverCode = LocalStorage.getItem('verifyCode');
-        console.log('serverCode from local storage:', serverCode);
-        if (!serverCode || !userCode) return res.status(400).json({ error: 'Missing serverCode or userCode' });
+        //const serverCode = LocalStorage.getItem('verifyCode');
+        console.log('serverCode from local storage:', verifyCode);
+        if (!verifyCode || !userCode) return res.status(400).json({ error: 'Missing serverCode or userCode' });
 
-        if (!verifyCodes(serverCode, userCode)) {
+        if (!verifyCodes(verifyCode, userCode)) {
             return res.status(400).json({ error: 'Verification codes do not match' });
         }
-
-        //if (!tk) return res.status(401).json({ error: 'No token in local storage' });
-
-        //const tokenOwner = StoredToken.findOne({ token: tk });
-        //const Fuser = await fetch('http://localhost:5000/api/me', {
-        //    method: 'GET',
-        //});
-        //if (!Fuser) return res.status(400).json({ error: 'User id not found in token' });
         console.log('Finding user with email:', req.params['Email']);
         // Mark user as verified
         const updated = await user.findOneAndUpdate(

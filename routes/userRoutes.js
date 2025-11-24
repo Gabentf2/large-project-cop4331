@@ -4,8 +4,6 @@ const Event = require('../models/event');
 const User = require('../models/user');
 const authenticateToken = require('../middleware/auth'); //chatgpt garbage that might not be used...
 const StoredToken = require('../models/storedToken');
-var LocalStorage = require('node-localstorage').LocalStorage;
-LocalStorage = new LocalStorage('./scratch');
 const mongoose = require('mongoose');
 function inTheFuture(date, hours) {
     const toAdd = hours * 60 * 60 * 1000; // hours to milliseconds
@@ -61,28 +59,24 @@ router.post('/api/createEvent', async (req, res) => {
 // Body: { userId }
 // Verifies that the requesting user owns the event (is listed in OwnedEvents) before deleting.
 //authentication will be delt with later if needed...
-router.delete('/api/deleteEvent/:Eid', /*authenticateToken,*/ async (req, res) => { 
+router.delete('/api/deleteEvent/:Eid/:Token', /*authenticateToken,*/ async (req, res) => { 
     //const { eventId } = req.params['Eid'];
     console.log('Attempting to delete event with id:', req.params['Eid']);
-    /*
-    //const tokenUserId = req.user && req.user.userId;
-    
-    //if (!tokenUserId) return res.status(401).json({ error: 'Invalid token payload' });
-    //actual implementation of jwt chatgpt more like uhhhh
-    const foundToken = await StoredToken.findOne({ token: LocalStorage.getItem('token') }).exec();
-    console.log('Looking for token:', LocalStorage.getItem('token'));
-    console.log('Found token:', foundToken._id);
-    if (foundToken.token == undefined) return res.status(401).json({ error: 'Invalid or missing token' });
-    else if(foundToken.expiry < new Date()) {
-        return res.status(403).json({ error: 'Token expired' });
-    }
-    const tokenUserId = foundToken.userId;
-    */
+    token = req.params['Token'];
     try {
+        var address;
         // Find the user
-        const theUser = await fetch('http://localhost:5000/api/me', {
+        if(process.env.NODE_ENV == 'development'){
+            address = 'http://rickleinecker2025.me:5000/api/me'
+        }
+        else
+        {
+            address = 'http://localhost:5000/api/me'
+        }
+        const theUser = await fetch(address, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Token: token})
         });  
 
         if (!theUser) 

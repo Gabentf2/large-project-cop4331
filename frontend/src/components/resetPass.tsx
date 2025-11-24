@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Form, Button, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { buildPath } from './Path';
 
 const ResetPass: React.FC = () => { 
     const [nPassword, setNewPassword] = useState('');
@@ -28,10 +29,10 @@ const ResetPass: React.FC = () => {
             return;
         }
         try {
-            const res = await fetch('http://localhost:5000/api/reset-password', {
+            const res = await fetch(buildPath('api/reset-passwords'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: resetCode, newPassword: nPassword }),
+                body: JSON.stringify({ code: resetCode, newPassword: nPassword, email: localStorage.getItem('userEmail'), serverCode: localStorage.getItem('resetCode') }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -39,6 +40,7 @@ const ResetPass: React.FC = () => {
                 return;
             }
             setSuccess('Password reset successful. You can now log in with your new password.');
+            localStorage.removeItem('resetCode');
             setTimeout(() => navigate('/login'), 3000);
         } catch (err) {
             setError('An error occurred. Please try again.');

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form, Button, Alert, Spinner, Container, Row, Col } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
+import { buildPath } from './Path';
 
 interface VerifyProps {
     onVerify?: () => void;
@@ -22,10 +23,10 @@ const Verify: React.FC<VerifyProps> = ({ onVerify }) => {
         }
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:5000/api/verify-code/${email}`, {
+            const res = await fetch(buildPath(`api/verify-code/${email}`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userCode: code }),
+                body: JSON.stringify({ userCode: code, verifyCode: localStorage.getItem('verifyCode') }),
             });
 
             const data = await res.json();
@@ -35,6 +36,7 @@ const Verify: React.FC<VerifyProps> = ({ onVerify }) => {
                 return;
             }
             if (onVerify) onVerify();
+            localStorage.remove('verifyCode');
             navigate('/login');
         } catch (err) {
             setError('An error occurred. Please try again.');

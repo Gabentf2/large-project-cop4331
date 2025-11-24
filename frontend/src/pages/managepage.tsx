@@ -3,7 +3,7 @@ import { Container, Row, Col, Spinner, Alert, Modal, Button } from 'react-bootst
 import AppNavbar from '../components/navbar';
 import Event from '../components/Event';
 import { useNavigate } from 'react-router-dom';
-
+import { buildPath } from '../components/Path';
 
 type EventItem = {
   _id: string;
@@ -38,7 +38,7 @@ const ManagePage: React.FC = () => {
         }
 
         // fetch current user via /api/me
-      const meRes = await fetch('http://localhost:5000/api/me', {
+      const meRes = await fetch(buildPath('api/me'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64,7 +64,7 @@ const ManagePage: React.FC = () => {
           : [];
 
         // fetch all events
-        const eventsRes = await fetch('http://localhost:5000/api/events', { signal });
+        const eventsRes = await fetch(buildPath('api/events'), { signal });
         if (!eventsRes.ok) throw new Error('Failed to load events');
         const all = await eventsRes.json();
 
@@ -116,7 +116,7 @@ const ManagePage: React.FC = () => {
     const token = localStorage.getItem('token');
     const headers: any = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const fetchurl = `http://localhost:5000/api/deleteEvent/${selected._id}`;
+    const fetchurl = buildPath(`api/deleteEvent/${token}/${selected._id}`);
     //fetchurl.set('z', selected._id);
     try {
       // try DELETE /api/events/:id first

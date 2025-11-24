@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Form, Button, Alert, Spinner, Container, Row, Col } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { buildPath } from './Path';
 
 interface LoginProps {
     onLogin?: (token: string) => void;
@@ -24,7 +25,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         setLoading(true);
         try {
-            const endpoint = isRegister ? 'http://localhost:5000/api/register' : 'http://localhost:5000/api/login';
+            const endpoint = isRegister ? buildPath('api/register') : buildPath('api/login');
             const body = isRegister
                 ? { displayname: email.split('@')[0] || '', email, password }
                 : { email, password };
@@ -43,10 +44,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             }
 
             // If registering, server may return ok/result — attempt to log in if token provided
-            if (data.Token) {
+            if (!isRegister) {
                 localStorage.setItem('token', data.Token);
                 localStorage.setItem('userId', data.userId || '');
                 localStorage.setItem('userName', data.name || '');
+                localStorage.setItem('serverCode', '12345');
                 if (onLogin) onLogin(data.Token);
                 navigate('/');
                 return;
@@ -54,9 +56,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
             // If registration succeeded but no token returned, inform the user
             if (isRegister) {
+                localStorage.setItem('verifyCode', data.verify);
+                localStorage.setItem('token', data.Token);
                 navigate('/login');
                 setError(null);
-                alert('Registration successful. Please check your email for verification instructions.');
+                alert('Registration successful. Please check your email for verification instructions. its possible it arrived in your spam folder.');
                 navigate(`/verify/${email}`);
             } else {
                 setError('Login succeeded but token was not returned');

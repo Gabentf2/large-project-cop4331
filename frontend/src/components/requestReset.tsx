@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Form, Button, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { buildPath } from './Path';
 const RequestReset: React.FC = () => {
     const [email, setEmail] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -15,17 +16,19 @@ const RequestReset: React.FC = () => {
             return;
         }
         try {
-            const res = await fetch('http://localhost:5000/api/request-password-reset', {
+            const res = await fetch(buildPath('api/request-password-reset'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),
             });
+            localStorage.setItem('userEmail', email);
             const data = await res.json();
             if (!res.ok) {
                 setError(data.error || 'Request failed');
                 return;
             }
-            setSuccess('If an account with that email exists, a reset code has been sent.');
+            localStorage.setItem('resetCode', data.resetCode);
+            setSuccess('If an account with that email exists, a reset code has been sent. its possible this email has arrived in your spam folder');
             setTimeout(() => navigate('/reset-password'), 3000);
         } catch (err) {
             setError('An error occurred. Please try again.');

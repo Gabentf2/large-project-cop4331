@@ -22,8 +22,6 @@ const AppNavbar: React.FC = () => {
     if (loggedIn) {
       // logout
       localStorage.removeItem('token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('userName');
       setLoggedIn(false);
       navigate('/login');
     } else {
